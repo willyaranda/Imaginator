@@ -1,0 +1,18 @@
+{
+  "name": "imagecrawler",
+  "version": "1.0.0",
+  "description": "Give me a domain, I'll give you an image",
+  "main": "index.js",
+  "scripts": {
+    "test": "mocha test/"
+  },
+  "keywords": [
+    "crawler",
+    "image",
+    "domain",
+    "fetcher",
+    "dashlane"
+  ],
+  "author": "Guillermo López",
+  "license": "WTFPL"
+}
