@@ -7,9 +7,9 @@ var app = express();
 var config = require('./config.json');
 winston.level = config.logger.level || 'debug';
 var domainValidator = require('./domain/index.js').domainValidator;
+var generatePossibleURLs = require('./fetchers/index.js').generatePossibleURLs;
 
 app.get('/get', function (req, res) {
-  console.log('hola');
   winston.debug('GET /get');
   let domain = req.query.domain;
   domainValidator(domain, function(err, clean) {
@@ -19,8 +19,15 @@ app.get('/get', function (req, res) {
       return winston.error(msg);
     }
     let msg = "Domain to be requested=" + clean;
-    res.status(200).send(msg);
+    //res.status(200).send(msg);
     winston.debug(msg);
+    generatePossibleURLs(clean, function(err, urls) {
+      if (err) {
+        return res.status(500).send(err);
+      }
+      let msg = "Wohooo, URLs to be fetched=" + urls;
+      winston.debug(msg);
+    });
   });
 
 });
