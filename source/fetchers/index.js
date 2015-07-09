@@ -3,17 +3,10 @@
 var request = require('request');
 var htmlparser = require('htmlparser2');
 var winston = require('winston');
+var async = require('async');
 
-var wellKnownURLsFetcher = function(domain, cb) {
-  /*
-    domain.com/favicon.ico
-    www.domain.com/favicon.ico
-    domain.com/apple-touch-icon.png
-  */
-
-};
-
-var headersFetcher = function(domain, cb) {
+var internalParser = function(body, url) {
+  winston.debug('[internalParser]');
   /*
     This is some of the icons found on different websites:
     <link rel="apple-touch-icon" href="/static/apple-touch/wikipedia.png">
@@ -21,10 +14,6 @@ var headersFetcher = function(domain, cb) {
     <meta property="og:image" content="http://images.apple.com/home/images/og.jpg?201506300817">
     <meta content="/images/google_favicon_128.png" itemprop="image">
   */
-};
-
-var internalParser = function(body, url) {
-  winston.debug('[internalParser]');
   let internalUrls = [];
   let parser = new htmlparser.Parser({
     onopentag: function(name, attrs) {
@@ -52,7 +41,7 @@ var internalParser = function(body, url) {
   // Add URL at start if they do not have
   let rv = internalUrls.map(function(el) {
     if (el.substr(0, 4) !== 'http') {
-      return el = url + '/' + el;
+      return url + '/' + el;
     } else {
       return el;
     }
@@ -79,7 +68,49 @@ var generatePossibleURLs = function(url, cb) {
   });
 };
 
+var downloadImages = function (urls, cb) {
+  let images = [];
+  // Images array should contain this obj:
+  /*
+    obj =
+      {
+        url:
+        image:
+      }
+  */
+  var _fetch = function(url, cb) {
+    winston.debug("Fetching " + url);
+    let obj = {
+      url: url,
+      image: null
+    };
+    let opts = {
+      url: url,
+      encoding: null
+    };
+    request.get(opts, function(err, res, body) {
+      if (err || res.statusCode !== 200) {
+        let msg = "[_fetch]" + url + " -- err=" + err || res.statusCode;
+        winston.err(msg);
+        cb();
+        return;
+      }
+
+      let msg = "[_fetch] correct! " + url;
+      winston.debug(msg);
+      obj.image = body;
+      images.push(obj);
+      cb();
+    });
+  };
+
+  async.each(urls, _fetch, function () {
+    winston.debug('Fetch finished');
+    cb(null, images);
+  });
+}
+
 module.exports = {
-  //fetchers: fetchers,
+  downloadImages: downloadImages,
   generatePossibleURLs: generatePossibleURLs
 };

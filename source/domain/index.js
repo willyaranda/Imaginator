@@ -12,10 +12,12 @@ var domainValidator = function(domain, cb) {
     return cb(new Error('empty domain'));
   }
 
-  // Add http:// if it is not found. We can then change to https if we
+  // Add http if it is not found. We can then change to https if we
   // don't have any response
-  if (domain.indexOf('http://') === -1) {
+  if (domain.indexOf('http') === -1) {
     cleanDomain = 'http://' + domain;
+  } else {
+    cleanDomain = domain;
   }
 
   // Parse the URL and format a correct URL
