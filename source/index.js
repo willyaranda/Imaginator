@@ -16,7 +16,7 @@ app.get('/get', function (req, res) {
     if (err || clean === null) {
       let msg = "Requested INVALID domain=" + domain;
       res.status(400).send(msg);
-      return winston.err(msg);
+      return winston.error(msg);
     }
     let msg = "Domain to be requested=" + clean;
     res.status(200).send(msg);
