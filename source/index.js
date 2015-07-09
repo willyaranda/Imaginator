@@ -1,78 +1,32 @@
 'use strict';
-var async = require('async');
-var sizeOf = require('image-size');
+var LRU = require('lru-cache');
 var winston = require('winston');
 var express = require('express');
 var app = express();
 
 var config = require('./config.json');
 winston.level = config.logger.level || 'debug';
-var domainValidator = require('./domain/index.js').domainValidator;
-var generatePossibleURLs = require('./fetchers/index.js').generatePossibleURLs;
-var downloadImages = require('./fetchers/index.js').downloadImages;
 
-var LRU = require('lru-cache');
+var domainValidator = require('./domain/index.js').domainValidator;
+var fetchers = require('./fetchers/index.js');
+var generatePossibleURLs = fetchers.generatePossibleURLs;
+var downloadImages = fetchers.downloadImages;
+var imageFuncs = require('./images/index.js');
+
+
+// Holds images, up to 500 entries, so 500 different domains
 var cacheOpts = {
   max: 500,
   maxAge: 1000 * 60 * 60
 };
-
 var imagesCache = LRU(cacheOpts);
 
-var getSize = function(imagesObj) {
-  winston.debug('[getSize]');
-  imagesObj.forEach(function(i, index) {
-    if (i.image) {
-      let size = null;
-      try {
-        size = sizeOf(new Buffer(i.image));
-        imagesObj[index].dimentions = size;
-        winston.debug('Image ' + i.url + ' -- size=' + JSON.stringify(size));
-      } catch (e) {
-        //winston.error(e);
-      }
-    } else {
-      winston.debug('Image ' + i.url + ' NOT DOWNLOADED');
-    }
-  });
-  return imagesObj;
-};
-
-var getBestImage = function(images) {
-  winston.debug('[getBestImage]');
-  let maxPixls = 0;
-  let rv = {
-    type: null,
-    binary: null
-  };
-  let fallback = {
-    type: 'ico', // .ico file, the smallest one
-    binary: null
-  };
-  images.forEach(function(im) {
-    if (im.url.substr(im.url.length - 4) === '.ico') {
-      fallback.binary = im.image;
-      return;
-    }
-    let pxls = im.dimentions.width * im.dimentions.height;
-    if (pxls > maxPixls) {
-      maxPixls = pxls;
-      rv.type = im.dimentions.type;
-      rv.binary = im.image;
-    }
-  });
-
-  // Return only the image if we have a binary file, if not, send favicon
-  if (rv.binary) {
-    return rv;
-  } else {
-    return fallback;
-  }
-};
-
+// Routes, as we only have a simple get, let's put it here, and don't add
+// complexity to the code
 app.get('/get', function (req, res) {
   winston.debug('GET /get');
   let domain = req.query.domain;
+  // 1st pass: clean the received domain
   domainValidator(domain, function(err, cleanDomain) {
     if (err || cleanDomain === null) {
       let msg = 'Requested INVALID domain=' + domain;
@@ -85,6 +39,7 @@ app.get('/get', function (req, res) {
 
     // Early return if we have the image on cache
     let img = null;
+    // 2nd (part a): if we have the image in the cache, just return it
     if (img = imagesCache.get(cleanDomain)) {
       winston.info(cleanDomain + ' found on cache, yay!');
       res.setHeader('X-Cache', true);
@@ -92,15 +47,19 @@ app.get('/get', function (req, res) {
       return;
     }
 
+    // 2nd (part b): we do not have in the cache, let's build the possible
+    // image URLS we can have!
     generatePossibleURLs(cleanDomain, function(err, urls) {
       if (err) {
         return res.status(500).send(err);
       }
       let msg = 'Wohooo, URLs to be fetched=' + urls;
       winston.debug(msg);
+      // 3rd: let's download the images and store it on imagesObj
       downloadImages(urls, function(err, imagesObj) {
-        let imgs = getSize(imagesObj);
-        let bestImage = getBestImage(imgs);
+        let imgs = imageFuncs.getSize(imagesObj);
+        // 4th: get the biggest image and send
+        let bestImage = imageFuncs.getBestImage(imgs);
         imagesCache.set(cleanDomain, bestImage);
         res.status(200).type(bestImage.type).send(bestImage.binary);
       });

@@ -5,6 +5,12 @@ var htmlparser = require('htmlparser2');
 var winston = require('winston');
 var async = require('async');
 
+/**
+ * Receives a full string html page, and returns possible image URLs to fetch
+ * @param  {String} body a HTML page, as string
+ * @param  {String} url  the url of the given body
+ * @return {Array}      Returns a list of possible images found on the page
+ */
 var internalParser = function(body, url) {
   winston.debug('[internalParser]');
   /*
@@ -17,9 +23,6 @@ var internalParser = function(body, url) {
   let internalUrls = [];
   let parser = new htmlparser.Parser({
     onopentag: function(name, attrs) {
-      // if (name === 'link' || name === 'meta') {
-      //   winston.debug(name + " -- " + JSON.stringify(attrs));
-      // }
       if ((name === 'link') && (attrs.rel === 'apple-touch-icon')) {
         internalUrls.push(attrs.href);
       } else if ((name === 'link') && (attrs.rel === 'icon')) {
@@ -30,17 +33,17 @@ var internalParser = function(body, url) {
         internalUrls.push(attrs.content);
       } else if ((name === 'meta') && (attrs.itemprop === 'image')) {
         internalUrls.push(attrs.content);
-      } else {
-
       }
     }
   });
   parser.write(body);
   parser.end();
 
-  // Add URL at start if they do not have
+  // Add URL at start if they do not have (maybe they are relative to the domain)
   let rv = internalUrls.map(function(el) {
-    if (el.substr(0, 4) !== 'http') {
+    if (el.substr(0, 2) === '//') {
+      return 'http:' + el;
+    } else if (el.substr(0, 4) !== 'http') {
       return url + '/' + el;
     } else {
       return el;
@@ -49,6 +52,12 @@ var internalParser = function(body, url) {
   return rv;
 };
 
+/**
+ * Calls the callback with an (optional) error and a list of images found on the
+ * website
+ * @param  {String}   url url to check for images
+ * @param  {Function} cb  called with err, [imagesUrl]
+ */
 var generatePossibleURLs = function(url, cb) {
   let validURLs = [];
 
@@ -68,6 +77,12 @@ var generatePossibleURLs = function(url, cb) {
   });
 };
 
+/**
+ * Download a list of given urls in batch (parallel) and calls the callback with
+ * an (optional) error and an object with the url and the image (as Buffer)
+ * @param  {Array}   urls urls to download
+ * @param  {Function} cb
+ */
 var downloadImages = function (urls, cb) {
   let images = [];
   // Images array should contain this obj:
@@ -91,7 +106,7 @@ var downloadImages = function (urls, cb) {
     request.get(opts, function(err, res, body) {
       if (err || res.statusCode !== 200) {
         let msg = "[_fetch]" + url + " -- err=" + err || res.statusCode;
-        winston.err(msg);
+        winston.error(msg);
         cb();
         return;
       }
@@ -108,7 +123,7 @@ var downloadImages = function (urls, cb) {
     winston.debug('Fetch finished');
     cb(null, images);
   });
-}
+};
 
 module.exports = {
   downloadImages: downloadImages,
